@@ -2,11 +2,8 @@
  * =================================================================
  * SCRIPT UTAMA DASHBOARD - SISTEM JURNAL & DISIPLIN GURU
  * =================================================================
- * @version 6.1 - Refactored for Dashboard Page
+ * @version 6.2 - Fix "Identifier already declared" (Renaming to supabaseClient)
  * @author Disesuaikan oleh AI untuk Proyek Anda
- *
- * Terhubung dengan Supabase untuk otentikasi dan database.
- * Mengelola semua logika frontend untuk halaman dashboard.
  */
 
 // ====================================================================
@@ -16,8 +13,15 @@
 const SUPABASE_URL = 'https://lkxjgsgkajpaloswedck.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreGpnc2drYWpwYWxvc3dlZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MDEyMjQsImV4cCI6MjA4NjE3NzIyNH0.A2KeArJQz6TNtLauZSyurMit3IK4hClwdoy4_qicPUc';
 
+// Cek Library
+if (typeof window.supabase === 'undefined') {
+    alert("Error: Library Supabase tidak terdeteksi. Pastikan internet lancar atau CDN tidak memblokir.");
+}
+
 const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// [PERBAIKAN] Menggunakan nama 'supabaseClient' dan 'var' untuk mencegah konflik
+var supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const AppState = {
     user: null,
@@ -48,7 +52,9 @@ function showStatusMessage(message, type = 'info', duration = 4000) {
     statusEl.textContent = message;
     statusEl.className = `status-message ${type}`;
     statusEl.style.display = 'block';
-    window.scrollTo(0, 0);
+    // Scroll agar pesan terlihat
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
     if (duration > 0) setTimeout(() => { statusEl.style.display = 'none'; }, duration);
 }
 
@@ -56,7 +62,10 @@ function populateDropdown(selectElementId, data, valueField, textField, defaultO
     const select = document.getElementById(selectElementId);
     if (!select) return;
     select.innerHTML = `<option value="">-- ${defaultOptionText} --</option>`;
+    
+    // Filter item unik
     const uniqueItems = [...new Map(data.map(item => [item[valueField], item])).values()];
+    
     uniqueItems.forEach(item => {
         const option = document.createElement('option');
         option.value = item[valueField];
@@ -70,10 +79,10 @@ function populateDropdown(selectElementId, data, valueField, textField, defaultO
 // ====================================================================
 
 async function checkAuthenticationAndSetup() {
-    const { data: { session } } = await supabase.auth.getSession();
+    // Gunakan supabaseClient
+    const { data: { session } } = await supabaseClient.auth.getSession();
     
     // Jika tidak ada sesi, pengguna tidak boleh berada di dashboard.
-    // Alihkan paksa ke halaman login.
     if (!session) {
         window.location.replace('index.html');
         return;
@@ -81,18 +90,32 @@ async function checkAuthenticationAndSetup() {
     
     // Jika ada sesi, lanjutkan setup
     AppState.user = session.user;
-    const { data: profileData } = await supabase.from('profiles').select('*').eq('id', AppState.user.id).single();
+    
+    // Ambil data profil dari tabel 'profiles'
+    const { data: profileData, error } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', AppState.user.id)
+        .single();
+
     if (profileData) {
         AppState.profile = profileData;
         const welcomeEl = document.getElementById('welcomeMessage');
         if(welcomeEl) welcomeEl.textContent = `Selamat Datang, ${profileData.full_name || session.user.email}!`;
+    } else {
+        console.warn("Profil tidak ditemukan:", error);
+        // Fallback jika profil belum dibuat trigger
+        const welcomeEl = document.getElementById('welcomeMessage');
+        if(welcomeEl) welcomeEl.textContent = `Selamat Datang, ${session.user.email}!`;
+        // Set dummy profile agar UI tidak crash
+        AppState.profile = { role: 'Guru', full_name: session.user.email }; 
     }
 }
 
 async function handleLogout() {
     if (!confirm('Apakah Anda yakin ingin logout?')) return;
     showLoading(true);
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     showLoading(false);
     window.location.replace('index.html');
 }
@@ -106,10 +129,12 @@ async function handleLogout() {
 async function checkUserRoleAndSetupUI() {
     if (!AppState.profile) return;
     const adminElements = document.querySelectorAll('.admin-only');
+    
     if (AppState.profile.role !== 'Admin') {
         adminElements.forEach(el => el.style.display = 'none');
     } else {
         adminElements.forEach(el => {
+             // Pastikan display block untuk div, inline-block untuk tombol jika perlu
              el.style.display = el.tagName === 'DIV' ? 'block' : 'inline-block';
          });
     }
@@ -117,15 +142,22 @@ async function checkUserRoleAndSetupUI() {
 
 async function loadInitialData() {
     showLoading(true);
+    
+    // Ambil data secara paralel
     const promises = [
-        supabase.from('penugasan_guru').select('kelas, mata_pelajaran').eq('guru_id', AppState.user.id),
-        supabase.from('siswa').select('nisn, nama, kelas').order('nama'),
-        supabase.from('pelanggaran_master').select('id, deskripsi').order('deskripsi')
+        supabaseClient.from('penugasan_guru').select('kelas, mata_pelajaran').eq('guru_id', AppState.user.id),
+        supabaseClient.from('siswa').select('nisn, nama, kelas').order('nama'),
+        supabaseClient.from('pelanggaran_master').select('id, deskripsi').order('deskripsi')
     ];
 
+    // Jika Admin, ambil data tambahan
     if (AppState.profile.role === 'Admin') {
-        promises.push(supabase.from('profiles').select('id, full_name').eq('role', 'Guru').order('full_name'));
-        promises.push(supabase.from('penugasan_guru').select('*, profiles(full_name)').order('kelas'));
+        promises.push(supabaseClient.from('profiles').select('id, full_name').eq('role', 'Guru').order('full_name'));
+        promises.push(supabaseClient.from('penugasan_guru').select('*, profiles(full_name)').order('kelas'));
+    } else {
+        // Placeholder agar array destructuring tidak error
+        promises.push(Promise.resolve({ data: [] }));
+        promises.push(Promise.resolve({ data: [] }));
     }
 
     const [assignments, students, violations, teachers, allAssignments] = await Promise.all(promises);
@@ -133,8 +165,8 @@ async function loadInitialData() {
     if (assignments.data) AppState.assignments = assignments.data;
     if (students.data) AppState.students = students.data;
     if (violations.data) AppState.violations = violations.data;
-    if (teachers && teachers.data) AppState.teachers = teachers.data;
-    if (allAssignments && allAssignments.data) AppState.allAssignments = allAssignments.data;
+    if (teachers.data) AppState.teachers = teachers.data;
+    if (allAssignments.data) AppState.allAssignments = allAssignments.data;
 
     showLoading(false);
 }
@@ -143,7 +175,7 @@ function populateInitialDropdowns() {
     populateDropdown('jurnalKelas', AppState.assignments, 'kelas', 'kelas', 'Pilih Kelas');
     populateDropdown('jurnalMapel', AppState.assignments, 'mata_pelajaran', 'mata_pelajaran', 'Pilih Mata Pelajaran');
     populateDropdown('deskripsiDisiplinInput', AppState.violations, 'id', 'deskripsi', 'Pilih Pelanggaran');
-    if (AppState.profile.role === 'Admin') {
+    if (AppState.profile && AppState.profile.role === 'Admin') {
         populateDropdown('penugasanGuru', AppState.teachers, 'id', 'full_name', 'Pilih Guru');
     }
 }
@@ -161,7 +193,7 @@ async function loadSiswaForJurnal() {
     showLoading(true);
     tableBody.innerHTML = `<tr><td colspan="3" style="text-align: center;">Memuat data siswa...</td></tr>`;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('siswa')
         .select('nisn, nama')
         .eq('kelas', kelas)
@@ -243,7 +275,8 @@ async function handleJurnalSubmit(event) {
     }
 
     showLoading(true);
-    const { error } = await supabase.from('jurnal_pelajaran').insert(jurnalData);
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.from('jurnal_pelajaran').insert(jurnalData);
     showLoading(false);
     
     if (error) {
@@ -261,7 +294,8 @@ async function loadRiwayatJurnal() {
     tableBody.innerHTML = '<tr><td colspan="6">Memuat riwayat...</td></tr>';
     
     showLoading(true);
-    let query = supabase.from('jurnal_pelajaran').select('*').order('tanggal', { ascending: false });
+    // Gunakan supabaseClient
+    let query = supabaseClient.from('jurnal_pelajaran').select('*').order('tanggal', { ascending: false });
     if (AppState.profile.role !== 'Admin') {
         query = query.eq('guru_id', AppState.user.id);
     }
@@ -363,7 +397,9 @@ function setupSiswaSearch() {
     const suggestionsContainer = document.getElementById('nisnSuggestions');
     const namaSiswaInput = document.getElementById('namaSiswaDisiplin');
 
-    searchInput?.addEventListener('input', () => {
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', () => {
         const query = searchInput.value.toLowerCase();
         suggestionsContainer.style.display = 'block';
         if (query.length < 2) {
@@ -379,11 +415,11 @@ function setupSiswaSearch() {
         ).join('');
     });
     
-    searchInput?.addEventListener('blur', () => {
+    searchInput.addEventListener('blur', () => {
         setTimeout(() => { suggestionsContainer.style.display = 'none'; }, 200);
     });
 
-    suggestionsContainer?.addEventListener('click', (e) => {
+    suggestionsContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('suggestion-item')) {
             const nisn = e.target.dataset.nisn;
             const nama = e.target.dataset.nama;
@@ -406,7 +442,8 @@ async function handleDisiplinSubmit(event) {
         return showStatusMessage('Harap pilih siswa dan jenis pelanggaran.', 'error');
     }
     showLoading(true);
-    const { error } = await supabase.from('catatan_disiplin').insert(disiplinData);
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.from('catatan_disiplin').insert(disiplinData);
     showLoading(false);
     if (error) return showStatusMessage(`Gagal menyimpan: ${error.message}`, 'error');
     showStatusMessage('Catatan disiplin berhasil disimpan!', 'success');
@@ -420,7 +457,8 @@ async function loadRiwayatDisiplin() {
     tableBody.innerHTML = '<tr><td colspan="7">Memuat riwayat...</td></tr>';
 
     showLoading(true);
-    const { data, error } = await supabase
+    // Gunakan supabaseClient
+    const { data, error } = await supabaseClient
         .from('catatan_disiplin')
         .select(`
             id,
@@ -500,12 +538,13 @@ async function handlePenugasanSubmit(event) {
         mata_pelajaran: document.getElementById('penugasanMapel').value.trim()
     };
     showLoading(true);
-    const { error } = await supabase.from('penugasan_guru').insert(penugasanData);
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.from('penugasan_guru').insert(penugasanData);
     showLoading(false);
     if (error) return showStatusMessage(`Gagal menyimpan: ${error.message}`, 'error');
     showStatusMessage('Penugasan berhasil disimpan!', 'success');
     event.target.reset();
-    const { data } = await supabase.from('penugasan_guru').select('*, profiles(full_name)');
+    const { data } = await supabaseClient.from('penugasan_guru').select('*, profiles(full_name)');
     if(data) AppState.allAssignments = data;
     loadPenugasanTable();
 }
@@ -513,9 +552,15 @@ async function handlePenugasanSubmit(event) {
 function loadPenugasanTable() {
     const tableBody = document.getElementById('penugasanTableBody');
     if(!tableBody) return;
+    
+    if (AppState.allAssignments.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Belum ada data penugasan.</td></tr>';
+        return;
+    }
+
     tableBody.innerHTML = AppState.allAssignments.map(a => `
         <tr>
-            <td data-label="Guru">${a.profiles.full_name}</td>
+            <td data-label="Guru">${a.profiles ? a.profiles.full_name : 'Guru Dihapus'}</td>
             <td data-label="Kelas">${a.kelas}</td>
             <td data-label="Mapel">${a.mata_pelajaran}</td>
             <td data-label="Aksi"><button class="btn btn-sm btn-danger" onclick="deletePenugasan('${a.id}')">Hapus</button></td>
@@ -526,11 +571,12 @@ function loadPenugasanTable() {
 async function deletePenugasan(id) {
     if (!confirm('Yakin ingin menghapus penugasan ini?')) return;
     showLoading(true);
-    const { error } = await supabase.from('penugasan_guru').delete().eq('id', id);
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.from('penugasan_guru').delete().eq('id', id);
     showLoading(false);
     if (error) return showStatusMessage(`Gagal menghapus: ${error.message}`, 'error');
     showStatusMessage('Penugasan berhasil dihapus.', 'success');
-    const { data } = await supabase.from('penugasan_guru').select('*, profiles(full_name)');
+    const { data } = await supabaseClient.from('penugasan_guru').select('*, profiles(full_name)');
     if(data) AppState.allAssignments = data;
     loadPenugasanTable();
 }
@@ -555,7 +601,8 @@ async function handlePenggunaSubmit(event) {
         }
 
         showLoading(true);
-        const { data: { user }, error } = await supabase.auth.admin.updateUserById(userIdToUpdate, updates);
+        // Gunakan supabaseClient
+        const { data: { user }, error } = await supabaseClient.auth.admin.updateUserById(userIdToUpdate, updates);
         showLoading(false);
 
         if (error) return showStatusMessage(`Gagal update pengguna: ${error.message}`, 'error');
@@ -568,7 +615,8 @@ async function handlePenggunaSubmit(event) {
         const role = document.getElementById('formPeran').value;
         
         showLoading(true);
-        const { data, error } = await supabase.auth.signUp({
+        // Gunakan supabaseClient
+        const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
@@ -594,7 +642,8 @@ async function loadUsersTable() {
     tableBody.innerHTML = '<tr><td colspan="4">Memuat data pengguna...</td></tr>';
     showLoading(true);
 
-    const { data, error } = await supabase.rpc('get_all_users');
+    // Gunakan supabaseClient
+    const { data, error } = await supabaseClient.rpc('get_all_users');
     showLoading(false);
 
     if (error) {
@@ -651,7 +700,8 @@ async function deleteUserHandler(userId) {
     if (!confirm('Apakah Anda yakin ingin menghapus pengguna ini? Tindakan ini tidak dapat dibatalkan.')) return;
     
     showLoading(true);
-    const { data, error } = await supabase.auth.admin.deleteUser(userId);
+    // Gunakan supabaseClient
+    const { data, error } = await supabaseClient.auth.admin.deleteUser(userId);
     showLoading(false);
 
     if (error) {
@@ -677,7 +727,8 @@ function resetPenggunaForm() {
 // --- 4.5 Fungsi Modul Manajemen Siswa (Admin) ---
 async function refreshSiswaData() {
     showLoading(true);
-    const { data: updatedSiswa, error } = await supabase.from('siswa').select('nisn, nama, kelas').order('nama');
+    // Gunakan supabaseClient
+    const { data: updatedSiswa, error } = await supabaseClient.from('siswa').select('nisn, nama, kelas').order('nama');
     showLoading(false);
     
     if (error) {
@@ -721,7 +772,8 @@ async function handleSiswaImport(event) {
                 return showStatusMessage('File CSV tidak berisi data yang valid. Pastikan header adalah: nisn, nama, kelas.', 'error');
             }
 
-            const { error } = await supabase.from('siswa').upsert(dataToInsert, { onConflict: 'nisn' });
+            // Gunakan supabaseClient
+            const { error } = await supabaseClient.from('siswa').upsert(dataToInsert, { onConflict: 'nisn' });
             
             showLoading(false);
             if (error) { return showStatusMessage(`Gagal mengimpor data: ${error.message}`, 'error'); }
@@ -770,10 +822,12 @@ async function saveSiswaHandler(event) {
     showLoading(true);
     let error;
     if (oldNisn) {
-        const { error: updateError } = await supabase.from('siswa').update( siswaData).eq('nisn', oldNisn);
+        // Gunakan supabaseClient
+        const { error: updateError } = await supabaseClient.from('siswa').update( siswaData).eq('nisn', oldNisn);
         error = updateError;
     } else {
-        const { error: insertError } = await supabase.from('siswa').insert(siswaData);
+        // Gunakan supabaseClient
+        const { error: insertError } = await supabaseClient.from('siswa').insert(siswaData);
         error = insertError;
     }
     showLoading(false);
@@ -805,7 +859,8 @@ async function deleteSiswaHandler(nisn) {
     if (!confirm(`Yakin ingin menghapus siswa dengan NISN: ${nisn}? Tindakan ini tidak dapat dibatalkan.`)) return;
 
     showLoading(true);
-    const { error } = await supabase.from('siswa').delete().eq('nisn', nisn);
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.from('siswa').delete().eq('nisn', nisn);
     showLoading(false);
     if (error) return showStatusMessage(`Gagal menghapus siswa: ${error.message}`, 'error');
 
@@ -867,20 +922,21 @@ function setupDashboardListeners() {
 }
 
 async function initDashboardPage() {
+    console.log("Inisialisasi Dashboard...");
     await checkAuthenticationAndSetup();
     if (AppState.user) {
         await checkUserRoleAndSetupUI();
         await loadInitialData();
         populateInitialDropdowns();
         setupDashboardListeners();
-        // Secara otomatis klik tombol navigasi pertama untuk menampilkan konten awal
+        // Secara otomatis klik tombol navigasi pertama
         document.querySelector('.sidebar-nav .btn-nav')?.click();
     }
 }
 
 // --- Titik Masuk Aplikasi ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Jalankan inisialisasi hanya jika ini adalah halaman dashboard
+    // Pastikan kita berada di halaman dashboard sebelum menjalankan inisialisasi
     if (document.querySelector('.dashboard-wrapper')) {
         initDashboardPage();
     }
