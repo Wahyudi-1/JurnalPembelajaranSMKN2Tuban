@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Sistem Jurnal & Disiplin</title>
+    <title>Dashboard - Sistem Jurnal & Disiplin SMKN 2 Tuban</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,7 +20,12 @@
 </head>
 <body>
     <header>
-        <div class="logo">Sistem Jurnal & Disiplin</div>
+        <!-- Logo dan Judul -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="https://raw.githubusercontent.com/Wahyudi-1/JurnalPembelajaranSMKN2Tuban/main/Logo.png" alt="Logo" style="height: 40px; width: auto;">
+            <div class="logo">Sistem Jurnal & Disiplin</div>
+        </div>
+        
         <nav>
             <span id="welcomeMessage" style="margin-right: 20px; color: var(--text-light);">Memuat...</span>
             <button id="logoutButton" class="btn btn-danger">Logout</button>
@@ -28,6 +33,7 @@
     </header>
 
     <div class="dashboard-wrapper">
+        <!-- Sidebar Navigasi -->
         <aside class="sidebar-nav">
             <h4>Menu Utama</h4>
             <button data-section="jurnalSection" class="btn-nav active">Input Jurnal</button>
@@ -35,6 +41,7 @@
             <button data-section="riwayatJurnalSection" class="btn-nav">Riwayat Jurnal</button>
             <button data-section="riwayatDisiplinSection" class="btn-nav">Riwayat Disiplin</button>
             
+            <!-- Menu Admin (Disembunyikan otomatis oleh JS jika bukan admin) -->
             <div class="admin-only" style="display: none;">
                 <hr>
                 <h4>Manajemen Admin</h4>
@@ -44,10 +51,13 @@
             </div>
         </aside>
 
+        <!-- Konten Utama -->
         <main class="dashboard-content">
+            <!-- Pesan Status & Loading -->
             <div id="statusMessage" class="status-message" style="display: none;"></div>
             <div id="loadingIndicator" class="loading-overlay" style="display: none;"><div class="spinner"></div></div>
 
+            <!-- 1. SECTION INPUT JURNAL -->
             <div id="jurnalSection" class="content-section">
                 <div class="card">
                     <div class="card-header">Input Jurnal Pembelajaran</div>
@@ -61,9 +71,12 @@
                             <button type="button" id="loadSiswaForJurnalButton" class="btn btn-secondary btn-block">Tampilkan Siswa untuk Presensi</button>
                         </div>
                         <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid var(--border-color);">
-                        <div class="form-group"><label for="jurnalTanggal">Tanggal Pembelajaran</label><input type="date" id="jurnalTanggal" required></div>
+                        <div class="form-grid">
+                            <div class="form-group"><label for="jurnalTanggal">Tanggal Pembelajaran</label><input type="date" id="jurnalTanggal" required></div>
+                        </div>
                         <div class="form-group"><label for="jurnalMateri">Materi yang Diajarkan</label><textarea id="jurnalMateri" rows="4" placeholder="Contoh: Bab 3 - Sistem Reproduksi Manusia" required></textarea></div>
                         <div class="form-group"><label for="jurnalCatatan">Catatan Tambahan (Opsional)</label><textarea id="jurnalCatatan" rows="2" placeholder="Contoh: Siswa sangat antusias, perlu pengulangan materi."></textarea></div>
+                        
                         <h4 style="margin-top: 2rem; margin-bottom: 1rem;">Presensi Siswa</h4>
                         <div class="table-container">
                             <table>
@@ -80,12 +93,17 @@
                 </div>
             </div>
 
+            <!-- 2. SECTION INPUT DISIPLIN -->
             <div id="disiplinSection" class="content-section" style="display: none;">
                 <div class="card">
                     <div class="card-header">Input Catatan Kedisiplinan Siswa</div>
                     <form id="formDisiplin">
                         <div class="form-grid">
-                            <div class="form-group"><label for="nisnDisiplinInput">NISN Siswa</label><input type="text" id="nisnDisiplinInput" name="nisn" placeholder="Ketik NISN atau Nama Siswa untuk mencari..." required><div id="nisnSuggestions" class="suggestions-container"></div></div>
+                            <div class="form-group">
+                                <label for="nisnDisiplinInput">NISN Siswa</label>
+                                <input type="text" id="nisnDisiplinInput" name="nisn" placeholder="Ketik NISN atau Nama Siswa..." required>
+                                <div id="nisnSuggestions" class="suggestions-container"></div>
+                            </div>
                             <div class="form-group"><label>Nama Siswa</label><input type="text" id="namaSiswaDisiplin" disabled placeholder="Nama akan terisi otomatis"></div>
                         </div>
                         <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid var(--border-color);">
@@ -95,6 +113,7 @@
                 </div>
             </div>
             
+            <!-- 3. SECTION RIWAYAT JURNAL -->
             <div id="riwayatJurnalSection" class="content-section" style="display: none;">
                 <div class="card">
                     <div class="card-header">Filter Riwayat Jurnal Pembelajaran</div>
@@ -114,7 +133,7 @@
                     <div class="table-container">
                         <table>
                             <thead>
-                                <tr><th>Tanggal</th><th>Kelas</th><th>Mata Pelajaran</th><th>Materi</th><th>Catatan (Termasuk Presensi)</th><th>Aksi</th></tr>
+                                <tr><th>Tanggal</th><th>Kelas</th><th>Mata Pelajaran</th><th>Materi</th><th>Catatan</th><th>Aksi</th></tr>
                             </thead>
                             <tbody id="riwayatJurnalTableBody">
                                 <tr><td colspan="6" style="text-align: center;">Gunakan filter untuk menampilkan riwayat.</td></tr>
@@ -124,6 +143,7 @@
                 </div>
             </div>
 
+            <!-- 4. SECTION RIWAYAT DISIPLIN -->
             <div id="riwayatDisiplinSection" class="content-section" style="display: none;">
                 <div class="card">
                     <div class="card-header">Filter Riwayat Catatan Disiplin</div>
@@ -151,6 +171,7 @@
                 </div>
             </div>
 
+            <!-- 5. SECTION ADMIN: PENUGASAN -->
             <div id="penugasanSection" class="content-section admin-only" style="display: none;">
                 <div class="card">
                     <div class="card-header">Manajemen Penugasan Guru</div>
@@ -173,6 +194,7 @@
                 </div>
             </div>
 
+            <!-- 6. SECTION ADMIN: SISWA -->
             <div id="siswaSection" class="content-section admin-only" style="display: none;">
                  <div class="card">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -206,21 +228,21 @@
                 </div>
             </div>
             
+            <!-- 7. SECTION ADMIN: PENGGUNA -->
             <div id="penggunaSection" class="content-section admin-only" style="display: none;">
                 <div class="card">
                     <div class="card-header">Manajemen Pengguna Sistem</div>
                     <form id="formPengguna" class="form-container">
-                        <input type="hidden" id="formUserIdToUpdate"> <!-- ADDED: Input tersembunyi untuk ID pengguna yang akan diupdate -->
+                        <input type="hidden" id="formUserIdToUpdate">
                         <div class="form-group"><label for="formNamaPengguna">Nama Lengkap</label><input type="text" id="formNamaPengguna" required></div>
                         <div class="form-group"><label for="formEmailPengguna">Email</label><input type="email" id="formEmailPengguna" required></div>
                         <div class="form-group"><label for="formPasswordPengguna">Password</label><input type="password" id="formPasswordPengguna" placeholder="Minimal 6 karakter" required></div>
                         <div class="form-group"><label for="formPeran">Peran</label><select id="formPeran" required><option value="Guru" selected>Guru</option><option value="Admin">Admin</option></select></div>
                         <div class="form-actions">
-                            <button type="submit" id="submitPenggunaButton" class="btn btn-accent">Buat Pengguna Baru</button> <!-- CHANGED: Added ID -->
-                            <button type="button" id="resetPenggunaButton" class="btn btn-secondary">Batal</button> <!-- ADDED: Tombol Batal/Reset -->
+                            <button type="submit" id="submitPenggunaButton" class="btn btn-accent">Buat Pengguna Baru</button>
+                            <button type="button" id="resetPenggunaButton" class="btn btn-secondary">Batal</button>
                         </div>
                     </form>
-                    <!-- ADDED: Bagian untuk menampilkan daftar pengguna -->
                     <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border-color);">
                     <h4>Daftar Pengguna Sistem</h4>
                     <div class="table-container">
@@ -234,20 +256,27 @@
                                 </tr>
                             </thead>
                             <tbody id="penggunaTableBody">
-                                <!-- Data pengguna akan dimuat di sini oleh JavaScript -->
                                 <tr><td colspan="4" style="text-align: center;">Memuat daftar pengguna...</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <!-- END ADDED SECTION -->
                 </div>
             </div>
         </main>
     </div>
     
+    <!-- ========================================================== -->
+    <!-- JAVASCRIPT LIBRARIES & SCRIPT                              -->
+    <!-- ========================================================== -->
+    
+    <!-- Library Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Library untuk Export Excel dan Import CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <script src="app.js"></script>
+    
+    <!-- Script Utama Dashboard -->
+    <script src="dashboard.js"></script>
 </body>
 </html>
