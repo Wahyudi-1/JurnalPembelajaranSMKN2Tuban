@@ -2,13 +2,8 @@
  * =================================================================
  * SCRIPT OTENTIKASI - SISTEM JURNAL & DISIPLIN GURU
  * =================================================================
- * @version 1.0 - Khusus untuk Halaman Login
+ * @version 1.1 - Fix "Identifier already declared" & Robust Loading
  * @author Disesuaikan oleh AI untuk Proyek Anda
- *
- * Script ini mengelola semua logika untuk halaman login, termasuk:
- * - Login pengguna.
- * - Penanganan lupa password & reset password.
- * - Pengecekan sesi untuk mengalihkan pengguna yang sudah login.
  */
 
 // ====================================================================
@@ -18,36 +13,37 @@
 const SUPABASE_URL = 'https://lkxjgsgkajpaloswedck.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreGpnc2drYWpwYWxvc3dlZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MDEyMjQsImV4cCI6MjA4NjE3NzIyNH0.A2KeArJQz6TNtLauZSyurMit3IK4hClwdoy4_qicPUc';
 
+// Cek apakah library Supabase sudah dimuat
+if (typeof window.supabase === 'undefined') {
+    console.error('CRITICAL ERROR: Library Supabase belum dimuat. Pastikan script CDN ada di index.html');
+    alert('Sistem Error: Koneksi ke database gagal (Library Missing).');
+}
+
 const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// [PERBAIKAN] Menggunakan 'var' dan nama 'supabaseClient' untuk menghindari konflik
+// jika script tidak sengaja terpanggil dua kali atau konflik dengan nama global library.
+var supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
 // ====================================================================
 // TAHAP 2: FUNGSI PEMBANTU (UI HELPERS)
 // ====================================================================
 
-/**
- * Menampilkan atau menyembunyikan indikator loading.
- * @param {boolean} isLoading - True untuk menampilkan, false untuk menyembunyikan.
- */
 function showLoading(isLoading) {
     const loader = document.getElementById('loadingIndicator');
     if (loader) loader.style.display = isLoading ? 'flex' : 'none';
 }
 
-/**
- * Menampilkan pesan status (error, success, info) kepada pengguna.
- * @param {string} message - Pesan yang akan ditampilkan.
- * @param {string} type - Tipe pesan ('info', 'success', 'error').
- * @param {number} duration - Durasi tampilan pesan dalam milidetik.
- */
 function showStatusMessage(message, type = 'info', duration = 4000) {
     const statusEl = document.getElementById('statusMessage');
     if (!statusEl) { alert(message); return; }
     statusEl.textContent = message;
     statusEl.className = `status-message ${type}`;
     statusEl.style.display = 'block';
-    window.scrollTo(0, 0);
+    // Scroll ke pesan agar terlihat user
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
     if (duration > 0) {
         setTimeout(() => { statusEl.style.display = 'none'; }, duration);
     }
@@ -58,22 +54,18 @@ function showStatusMessage(message, type = 'info', duration = 4000) {
 // TAHAP 3: FUNGSI OTENTIKASI & MANAJEMEN SESI
 // ====================================================================
 
-/**
- * Memeriksa sesi pengguna. Jika sudah login, alihkan ke dashboard.
- */
 async function checkSessionForLoginPage() {
-    const { data: { session } } = await supabase.auth.getSession();
-    // Jika ada sesi aktif dan URL tidak mengandung token recovery password,
-    // berarti pengguna sudah login dan tidak seharusnya berada di halaman ini.
+    // Gunakan supabaseClient yang baru
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
     if (session && !window.location.hash.includes('type=recovery')) {
+        console.log('User sudah login, mengalihkan ke dashboard...');
         window.location.replace('dashboard.html');
     }
 }
 
-/**
- * Menangani proses login pengguna.
- */
 async function handleLogin() {
+    console.log('Proses Login Dimulai...'); // Debugging log
     const email = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     
@@ -82,20 +74,20 @@ async function handleLogin() {
     }
 
     showLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Gunakan supabaseClient
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     showLoading(false);
 
     if (error) {
+        console.error('Login Error:', error);
         return showStatusMessage(`Login Gagal: ${error.message}`, 'error');
     }
     
-    // Jika berhasil, pengalihan akan terjadi secara otomatis atau bisa ditambahkan di sini.
+    console.log('Login Berhasil:', data);
+    showStatusMessage('Login berhasil! Mengalihkan...', 'success');
     window.location.href = 'dashboard.html';
 }
 
-/**
- * Menangani permintaan reset password.
- */
 async function handleForgotPassword() {
     const emailEl = document.getElementById('username');
     const email = emailEl.value;
@@ -109,8 +101,9 @@ async function handleForgotPassword() {
     }
 
     showLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/index.html', // Arahkan kembali ke halaman login
+    // Gunakan supabaseClient
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/index.html',
     });
     showLoading(false);
 
@@ -121,9 +114,6 @@ async function handleForgotPassword() {
     showStatusMessage('Email untuk reset password telah dikirim! Silakan periksa kotak masuk Anda.', 'success');
 }
 
-/**
- * Mengatur fungsi toggle untuk melihat/menyembunyikan password.
- */
 function setupPasswordToggle() {
     const toggleIcon = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
@@ -141,21 +131,17 @@ function setupPasswordToggle() {
     });
 }
 
-/**
- * Mendengarkan perubahan status otentikasi, khususnya untuk password recovery.
- */
 function setupAuthListener() {
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Gunakan supabaseClient
+    supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === "PASSWORD_RECOVERY") {
             const loginBox = document.querySelector('.login-box');
             const resetContainer = document.getElementById('resetPasswordContainer');
             if (!loginBox || !resetContainer) return;
             
-            // Sembunyikan form login, tampilkan form reset password
             loginBox.style.display = 'none';
             resetContainer.style.display = 'grid';
 
-            // Tambahkan event listener untuk form reset password
             document.getElementById('resetPasswordForm').onsubmit = async (e) => {
                 e.preventDefault();
                 const newPassword = document.getElementById('newPassword').value;
@@ -164,7 +150,8 @@ function setupAuthListener() {
                 }
                 
                 showLoading(true);
-                const { error } = await supabase.auth.updateUser({ password: newPassword });
+                // Gunakan supabaseClient
+                const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
                 showLoading(false);
                 
                 if (error) {
@@ -173,7 +160,7 @@ function setupAuthListener() {
                 
                 showStatusMessage('Password berhasil diperbarui! Anda akan diarahkan ke halaman login.', 'success', 3000);
                 setTimeout(() => { 
-                    window.location.hash = ''; // Hapus token dari URL
+                    window.location.hash = '';
                     window.location.reload(); 
                 }, 3000);
             };
@@ -186,31 +173,44 @@ function setupAuthListener() {
 // TAHAP 4: INISIALISASI HALAMAN LOGIN
 // ====================================================================
 
-/**
- * Fungsi utama untuk menginisialisasi semua fungsionalitas di halaman login.
- */
 function initLoginPage() {
+    console.log('Inisialisasi Halaman Login...');
     checkSessionForLoginPage();
     setupAuthListener();
     setupPasswordToggle();
 
-    const loginForm = document.querySelector('.login-box form');
+    const loginForm = document.querySelector('.login-form-container form'); // Selektor lebih spesifik
     if (loginForm) {
-        loginForm.addEventListener('submit', (e) => {
+        // Hapus event listener lama dengan clone node (trik untuk membersihkan event listener duplikat)
+        const newForm = loginForm.cloneNode(true);
+        loginForm.parentNode.replaceChild(newForm, loginForm);
+        
+        newForm.addEventListener('submit', (e) => {
             e.preventDefault();
             handleLogin();
         });
+        
+        // Re-attach password toggle logic karena elemen input baru saja di-clone
+        setupPasswordToggle(); 
+    } else {
+        console.error('Form login tidak ditemukan!');
     }
 
     const forgotPasswordLink = document.getElementById('forgotPasswordLink');
     if (forgotPasswordLink) {
-        forgotPasswordLink.addEventListener('click', (e) => {
+        const newLink = forgotPasswordLink.cloneNode(true);
+        forgotPasswordLink.parentNode.replaceChild(newLink, forgotPasswordLink);
+        
+        newLink.addEventListener('click', (e) => {
             e.preventDefault();
             handleForgotPassword();
         });
     }
 }
 
-// --- Titik Masuk Aplikasi ---
-// Jalankan fungsi inisialisasi setelah seluruh konten halaman dimuat.
-document.addEventListener('DOMContentLoaded', initLoginPage);
+// Jalankan saat dokumen siap
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLoginPage);
+} else {
+    initLoginPage();
+}
